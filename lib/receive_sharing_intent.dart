@@ -16,7 +16,7 @@ class ReceiveSharingIntent {
 
   static Stream<List<SharedMediaFile>> _streamMedia;
   static Stream<String> _streamText;
-  static Stream<Map<String, dynamic>> _streamUrl;
+  static Stream<SharedUrl> _streamUrl;
 
   /// Returns a [Future], which completes to one of the following:
   ///
@@ -60,18 +60,11 @@ class ReceiveSharingIntent {
   ///
   /// NOTE. The returned media on iOS (iOS ONLY) is already copied to a temp folder.
   /// So, you need to delete the file after you finish using it
-  static Future<List<SharedMediaFile>> getInitialUrl() async {
+  static Future<SharedUrl> getInitialUrl() async {
     final String json = await _mChannel.invokeMethod('getInitialUrl');
     if (json == null) return null;
     final encoded = jsonDecode(json);
-    return encoded.map<Map<String, dynamic>>((entry) {
-      return {
-        "text": entry["text"],
-        "media": entry["media"]
-            .map<SharedMediaFile>((file) => SharedMediaFile.fromJson(file))
-            .toList()
-      };
-    }).toList();
+    return SharedUrl.fromJson(encoded);
   }
 
   /// Sets up a broadcast stream for receiving incoming media share change events.
@@ -175,24 +168,17 @@ class ReceiveSharingIntent {
   ///
   /// If the app was started by a link intent or user activity the stream will
   /// not emit that initial one - query either the `getInitialMedia` instead.
-  static Stream<Map<String, dynamic>> getUrlStream() {
+  static Stream<SharedUrl> getUrlStream() {
     if (_streamUrl == null) {
       final stream = _eChannelUrl.receiveBroadcastStream("url").cast<String>();
-      _streamUrl = stream.transform<Map<String, dynamic>>(
-        new StreamTransformer<String, Map<String, dynamic>>.fromHandlers(
-          handleData: (String data, EventSink<Map<String, dynamic>> sink) {
+      _streamUrl = stream.transform<SharedUrl>(
+        new StreamTransformer<String, SharedUrl>.fromHandlers(
+          handleData: (String data, EventSink<SharedUrl> sink) {
             if (data == null) {
               sink.add(null);
             } else {
               final encoded = jsonDecode(data);
-              final map = {
-                "text": encoded["text"],
-                "media": encoded["media"]
-                    .map<SharedMediaFile>(
-                        (file) => SharedMediaFile.fromJson(file))
-                    .toList()
-              };
-              sink.add(map);
+              sink.add(SharedUrl.fromJson(encoded));
             }
           },
         ),
@@ -229,6 +215,20 @@ class SharedMediaFile {
         thumbnail = json['thumbnail'],
         duration = json['duration'],
         type = SharedMediaType.values[json['type']];
+}
+
+class SharedUrl {
+  /// URI of the shared url
+  final String url;
+
+  /// Path to the site screenshot
+  final String mediaPath;
+
+  SharedUrl(this.url, this.mediaPath);
+
+  SharedUrl.fromJson(Map<String, dynamic> json)
+      : url = json['url'],
+        mediaPath = json['mediaPath'];
 }
 
 enum SharedMediaType { IMAGE, VIDEO }

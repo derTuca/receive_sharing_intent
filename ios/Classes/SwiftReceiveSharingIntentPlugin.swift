@@ -15,8 +15,8 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     private var initialText: String? = nil
     private var latestText: String? = nil
     
-    private var initialUrl: [String:Any]? = nil
-    private var latestUrl: [String:Any]? = nil
+    private var initialUrl: SharedUrl? = nil
+    private var latestUrl: SharedUrl? = nil
     
     private var eventSinkMedia: FlutterEventSink? = nil;
     private var eventSinkText: FlutterEventSink? = nil;
@@ -49,7 +49,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         case "getInitialText":
             result(self.initialText);
         case "getInitialUrl":
-            result(toJson(data: self.initialUrl))
+            result(self.initialUrl?.toJson())
         case "reset":
             self.initialMedia = nil
             self.latestMedia = nil
@@ -93,7 +93,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
             if url.fragment == "media" {
                 if let key = url.host?.components(separatedBy: "=").last,
                     let json = userDefaults?.object(forKey: key) as? Data {
-                    let sharedArray = decode(data: json)
+                    let sharedArray = decodeMedia(data: json)
                     let sharedMediaFiles: [SharedMediaFile] = sharedArray.compactMap{
                         guard let path = getAbsolutePath(for: $0.path) else {
                             return nil
@@ -126,23 +126,12 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
             } else if url.fragment == "url" {
                 if let key = url.host?.components(separatedBy: "=").last,
                     let json = userDefaults?.object(forKey: key) as? Data {
-                    let sharedArray = decode(data: json)
-                    let sharedMediaFiles: [SharedMediaFile] = sharedArray["media"].compactMap{
-                        guard let path = getAbsolutePath(for: $0.path) else {
-                            return nil
-                        }
-                        
-                        return SharedMediaFile.init(path: path, thumbnail: nil, duration: $0.duration, type: $0.type)
-                    }
-                    let text = sharedArray["text"]
-                    latestUrl = [
-                        "text": text,
-                        "media": sharedMediaFiles
-                    ]
+                    let sharedUrl = decodeUrl(data: json)
+                    latestUrl = sharedUrl
                     if(setInitialData) {
                         initialUrl = latestUrl
                     }
-                    eventSinkUrl?(toJson(data: latestUrl))
+                    eventSinkUrl?(latestUrl?.toJson())
                 }
             } else {
                 latestText = url.absoluteString
@@ -215,19 +204,25 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
            return (url, orientation)
        }
     
-    private func decode(data: Data) -> Any {
+    private func decodeMedia(data: Data) -> [SharedMediaFile] {
         let encodedData = try? JSONDecoder().decode([SharedMediaFile].self, from: data)
         return encodedData!
     }
     
-    private func toJson(data: Any?) -> String? {
+    private func decodeUrl(data: Data) -> SharedUrl {
+        let encodedData = try? JSONDecoder().decode(SharedUrl.self, from: data)
+        return encodedData!
+    }
+    
+    private func toJson(data: [SharedMediaFile]?) -> String? {
         if data == nil {
             return nil
         }
         let encodedData = try? JSONEncoder().encode(data)
-         let json = String(data: encodedData!, encoding: .utf8)!
+        let json = String(data: encodedData!, encoding: .utf8)!
         return json
     }
+    
     
     class SharedMediaFile: Codable {
         var path: String;
@@ -235,12 +230,35 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         var duration: Double?; // video duration in milliseconds
         var type: SharedMediaType;
         
+        func toJson() -> String? {
+            let encodedData = try? JSONEncoder().encode(self)
+            let json = String(data: encodedData!, encoding: .utf8)!
+            return json
+        }
+        
         
         init(path: String, thumbnail: String?, duration: Double?, type: SharedMediaType) {
             self.path = path
             self.thumbnail = thumbnail
             self.duration = duration
             self.type = type
+        }
+        
+    }
+    
+    class SharedUrl: Codable {
+        var url: String?;
+        var mediaPath: String?;
+        
+        func toJson() -> String? {
+            let encodedData = try? JSONEncoder().encode(self)
+            let json = String(data: encodedData!, encoding: .utf8)!
+            return json
+        }
+        
+        init(url: String?, mediaPath: String?) {
+            self.url = url
+            self.mediaPath = mediaPath
         }
     }
     
