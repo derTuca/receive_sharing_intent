@@ -6,7 +6,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     
     static let kMessagesChannel = "receive_sharing_intent/messages";
     static let kEventsChannelMedia = "receive_sharing_intent/events-media";
-    static let kEventsChannelMedia = "receive_sharing_intent/events-url";
+    static let kEventsChannelUrl = "receive_sharing_intent/events-url";
     static let kEventsChannelLink = "receive_sharing_intent/events-text";
     
     private var initialMedia: [SharedMediaFile]? = nil
@@ -35,7 +35,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         let chargingChannelLink = FlutterEventChannel(name: kEventsChannelLink, binaryMessenger: registrar.messenger())
         chargingChannelLink.setStreamHandler(instance)
         
-        let chargingChannelUrl = FlutterEventChannel(name: kEventsChannelLink, binaryMessenger: registrar.messenger())
+        let chargingChannelUrl = FlutterEventChannel(name: kEventsChannelUrl, binaryMessenger: registrar.messenger())
         chargingChannelUrl.setStreamHandler(instance)
         
         registrar.addApplicationDelegate(instance)
@@ -64,9 +64,9 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     }
     
     public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [AnyHashable : Any] = [:]) -> Bool {
-        if let url = launchOptions[UIApplicationLaunchOptionsKey.url] as? URL {
+        if let url = launchOptions[UIApplication.LaunchOptionsKey.url] as? URL {
             return handleUrl(url: url, setInitialData: true)
-        } else if let activityDictionary = launchOptions[UIApplicationLaunchOptionsKey.userActivityDictionary] as? [AnyHashable: Any] { //Universal link
+        } else if let activityDictionary = launchOptions[UIApplication.LaunchOptionsKey.userActivityDictionary] as? [AnyHashable: Any] { //Universal link
             for key in activityDictionary.keys {
                 if let userActivity = activityDictionary[key] as? NSUserActivity {
                     if let url = userActivity.webpageURL {
@@ -78,7 +78,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         return false
     }
     
-    public func application(_ application: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any] = [:]) -> Bool {
+    public func application(_ application: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         return handleUrl(url: url, setInitialData: false)
     }
     
@@ -142,7 +142,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
                     if(setInitialData) {
                         initialUrl = latestUrl
                     }
-                    eventSinkUrl?(toJson(latestUrl))
+                    eventSinkUrl?(toJson(data: latestUrl))
                 }
             } else {
                 latestText = url.absoluteString
@@ -215,12 +215,12 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
            return (url, orientation)
        }
     
-    private func decode(data: Data) -> [SharedMediaFile] {
+    private func decode(data: Data) -> Any {
         let encodedData = try? JSONDecoder().decode([SharedMediaFile].self, from: data)
         return encodedData!
     }
     
-    private func toJson(data: [SharedMediaFile]?) -> String? {
+    private func toJson(data: Any?) -> String? {
         if data == nil {
             return nil
         }
