@@ -9,11 +9,14 @@ class ReceiveSharingIntent {
 
   static const EventChannel _eChannelMedia =
       const EventChannel("receive_sharing_intent/events-media");
-  static const EventChannel _eChannelLink =
+  static const EventChannel _eChannelText =
       const EventChannel("receive_sharing_intent/events-text");
+  static const EventChannel _eChannelUrl =
+      const EventChannel("receive_sharing_intent/events-url");
 
   static Stream<List<SharedMediaFile>> _streamMedia;
-  static Stream<String> _streamLink;
+  static Stream<String> _streamText;
+  static Stream<Map<String, dynamic>> _streamUrl;
 
   /// Returns a [Future], which completes to one of the following:
   ///
@@ -48,6 +51,27 @@ class ReceiveSharingIntent {
     final String data = await getInitialText();
     if (data == null) return null;
     return Uri.parse(data);
+  }
+
+  /// Returns a [Future], which completes to one of the following:
+  ///
+  ///   * the initially stored media uri (possibly null), on successful invocation;
+  ///   * a [PlatformException], if the invocation failed in the platform plugin.
+  ///
+  /// NOTE. The returned media on iOS (iOS ONLY) is already copied to a temp folder.
+  /// So, you need to delete the file after you finish using it
+  static Future<List<SharedMediaFile>> getInitialUrl() async {
+    final String json = await _mChannel.invokeMethod('getInitialUrl');
+    if (json == null) return null;
+    final encoded = jsonDecode(json);
+    return encoded.map<Map<String, dynamic>>((entry) {
+      return {
+        "text": entry["text"],
+        "media": entry["media"]
+            .map<SharedMediaFile>((file) => SharedMediaFile.fromJson(file))
+            .toList()
+      };
+    }).toList();
   }
 
   /// Sets up a broadcast stream for receiving incoming media share change events.
@@ -106,10 +130,10 @@ class ReceiveSharingIntent {
   /// If the app was started by a link intent or user activity the stream will
   /// not emit that initial one - query either the `getInitialText` instead.
   static Stream<String> getTextStream() {
-    if (_streamLink == null) {
-      _streamLink = _eChannelLink.receiveBroadcastStream("text").cast<String>();
+    if (_streamText == null) {
+      _streamText = _eChannelText.receiveBroadcastStream("text").cast<String>();
     }
-    return _streamLink;
+    return _streamText;
   }
 
   /// A convenience transformation of the stream to a `Stream<Uri>`.
@@ -133,6 +157,48 @@ class ReceiveSharingIntent {
         },
       ),
     );
+  }
+
+  /// Sets up a broadcast stream for receiving incoming media share change events.
+  ///
+  /// Returns a broadcast [Stream] which emits events to listeners as follows:
+  ///
+  ///   * a decoded data ([List]) event (possibly null) for each successful
+  ///   event received from the platform plugin;
+  ///   * an error event containing a [PlatformException] for each error event
+  ///   received from the platform plugin.
+  ///
+  /// Errors occurring during stream activation or deactivation are reported
+  /// through the `FlutterError` facility. Stream activation happens only when
+  /// stream listener count changes from 0 to 1. Stream deactivation happens
+  /// only when stream listener count changes from 1 to 0.
+  ///
+  /// If the app was started by a link intent or user activity the stream will
+  /// not emit that initial one - query either the `getInitialMedia` instead.
+  static Stream<Map<String, dynamic>> getUrlStream() {
+    if (_streamUrl == null) {
+      final stream = _eChannelUrl.receiveBroadcastStream("url").cast<String>();
+      _streamUrl = stream.transform<Map<String, dynamic>>(
+        new StreamTransformer<String, Map<String, dynamic>>.fromHandlers(
+          handleData: (String data, EventSink<Map<String, dynamic>> sink) {
+            if (data == null) {
+              sink.add(null);
+            } else {
+              final encoded = jsonDecode(data);
+              final map = {
+                "text": encoded["text"],
+                "media": encoded["media"]
+                    .map<SharedMediaFile>(
+                        (file) => SharedMediaFile.fromJson(file))
+                    .toList()
+              };
+              sink.add(map);
+            }
+          },
+        ),
+      );
+    }
+    return _streamUrl;
   }
 
   /// Call this method if you already consumed the callback

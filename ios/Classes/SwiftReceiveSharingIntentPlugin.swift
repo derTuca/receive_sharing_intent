@@ -6,6 +6,7 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     
     static let kMessagesChannel = "receive_sharing_intent/messages";
     static let kEventsChannelMedia = "receive_sharing_intent/events-media";
+    static let kEventsChannelMedia = "receive_sharing_intent/events-url";
     static let kEventsChannelLink = "receive_sharing_intent/events-text";
     
     private var initialMedia: [SharedMediaFile]? = nil
@@ -14,8 +15,12 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
     private var initialText: String? = nil
     private var latestText: String? = nil
     
+    private var initialUrl: [String:Any]? = nil
+    private var latestUrl: [String:Any]? = nil
+    
     private var eventSinkMedia: FlutterEventSink? = nil;
     private var eventSinkText: FlutterEventSink? = nil;
+    private var eventSinkUrl: FlutterEventSink? = nil;
     
     
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -30,6 +35,9 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         let chargingChannelLink = FlutterEventChannel(name: kEventsChannelLink, binaryMessenger: registrar.messenger())
         chargingChannelLink.setStreamHandler(instance)
         
+        let chargingChannelUrl = FlutterEventChannel(name: kEventsChannelLink, binaryMessenger: registrar.messenger())
+        chargingChannelUrl.setStreamHandler(instance)
+        
         registrar.addApplicationDelegate(instance)
     }
     
@@ -40,11 +48,15 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
             result(toJson(data: self.initialMedia));
         case "getInitialText":
             result(self.initialText);
+        case "getInitialUrl":
+            result(toJson(data: self.initialUrl))
         case "reset":
             self.initialMedia = nil
             self.latestMedia = nil
             self.initialText = nil
             self.latestText = nil
+            self.initialUrl = nil
+            self.latestUrl = nil
             result(nil);
         default:
             result(FlutterMethodNotImplemented);
@@ -111,6 +123,27 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
                     }
                     eventSinkText?(latestText)
                 }
+            } else if url.fragment == "url" {
+                if let key = url.host?.components(separatedBy: "=").last,
+                    let json = userDefaults?.object(forKey: key) as? Data {
+                    let sharedArray = decode(data: json)
+                    let sharedMediaFiles: [SharedMediaFile] = sharedArray["media"].compactMap{
+                        guard let path = getAbsolutePath(for: $0.path) else {
+                            return nil
+                        }
+                        
+                        return SharedMediaFile.init(path: path, thumbnail: nil, duration: $0.duration, type: $0.type)
+                    }
+                    let text = sharedArray["text"]
+                    latestUrl = [
+                        "text": text,
+                        "media": sharedMediaFiles
+                    ]
+                    if(setInitialData) {
+                        initialUrl = latestUrl
+                    }
+                    eventSinkUrl?(toJson(latestUrl))
+                }
             } else {
                 latestText = url.absoluteString
                 if(setInitialData) {
@@ -123,15 +156,18 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
         
         latestMedia = nil
         latestText = nil
+        latestUrl = nil
         return false
     }
     
     
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
         if (arguments as! String? == "media") {
-            eventSinkMedia = events;
+            eventSinkMedia = events
         } else if (arguments as! String? == "text") {
-            eventSinkText = events;
+            eventSinkText = events
+        } else if (arguments as! String? == "url") {
+            eventSinkUrl = events
         } else {
             return FlutterError.init(code: "NO_SUCH_ARGUMENT", message: "No such argument\(String(describing: arguments))", details: nil);
         }
@@ -143,6 +179,8 @@ public class SwiftReceiveSharingIntentPlugin: NSObject, FlutterPlugin, FlutterSt
             eventSinkMedia = nil;
         } else if (arguments as! String? == "text") {
             eventSinkText = nil;
+        } else if (arguments as! String? == "url") {
+            eventSinkUrl = nil
         } else {
             return FlutterError.init(code: "NO_SUCH_ARGUMENT", message: "No such argument as \(String(describing: arguments))", details: nil);
         }
