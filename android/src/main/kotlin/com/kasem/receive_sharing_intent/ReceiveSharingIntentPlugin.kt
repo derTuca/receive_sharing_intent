@@ -124,14 +124,14 @@ class ReceiveSharingIntentPlugin(val registrar: Registrar) :
                 val value = getMediaUris(context, intent)
                 if (initial) initialMedia = value
                 latestMedia = value
-                eventSinkMedia.success(latestMedia?.toString())
+                eventSinkMedia?.success(latestMedia?.toString())
             }
             (intent.type == null || intent.type?.startsWith("text") == true)
                     && intent.action == Intent.ACTION_SEND -> { // Sharing text
                 val value = intent.getStringExtra(Intent.EXTRA_TEXT)
                 if (initial) initialText = value
                 latestText = value
-                eventSinkText.success(latestText)
+                eventSinkText?.success(latestText)
             }
             intent.action == Intent.ACTION_VIEW -> { // Opening URL
                 val value = intent.dataString
@@ -145,7 +145,7 @@ class ReceiveSharingIntentPlugin(val registrar: Registrar) :
 
                     if (initial) initialUrl= model
                     latestUrl = model
-                    eventSinkUrl.success(model)
+                    eventSinkUrl?.success(model)
                 }
 
             }
